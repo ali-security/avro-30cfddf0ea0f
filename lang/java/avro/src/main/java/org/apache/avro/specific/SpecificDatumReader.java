@@ -21,15 +21,101 @@ import org.apache.avro.Conversion;
 import org.apache.avro.Schema;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.io.Decoder;
+import org.apache.avro.io.FastReaderBuilder;
 import org.apache.avro.io.ResolvingDecoder;
 import org.apache.avro.util.ClassUtils;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Set;
 
 /**
  * {@link org.apache.avro.io.DatumReader DatumReader} for generated Java
  * classes.
  */
 public class SpecificDatumReader<T> extends GenericDatumReader<T> {
+
+  /**
+   * Classes, and packages, that may not be instantiated through the
+   * {@link SpecificData#CLASS_PROP java-class} and
+   * {@link SpecificData#KEY_CLASS_PROP java-key-class} schema properties. An
+   * entry matches a class whose name equals the entry, or a class in the
+   * package named by the entry or in one of its sub-packages.
+   */
+  public static final String[] DENY_LIST;
+
+  static {
+    DENY_LIST = new String[] { "javax.script.ScriptEngineManager", "java.net.URLClassLoader", "bsh.XThis",
+        "bsh.Interpreter", "com.mchange.v2.c3p0.PoolBackedDataSource",
+        "com.mchange.v2.c3p0.impl.PoolBackedDataSourceBase", "clojure.lang.PersistentArrayMap",
+        "clojure.inspector.proxy$javax.swing.table.AbstractTableModel$ff19274a",
+        "org.apache.commons.beanutils.BeanComparator", "org.apache.commons.collections.Transformer",
+        "org.apache.commons.collections.functors.ChainedTransformer",
+        "org.apache.commons.collections.functors.ConstantTransformer",
+        "org.apache.commons.collections.functors.InstantiateTransformer", "org.apache.commons.collections.map.LazyMap",
+        "org.apache.commons.collections.functors.InvokerTransformer",
+        "org.apache.commons.collections.keyvalue.TiedMapEntry",
+        "org.apache.commons.collections4.comparators.TransformingComparator",
+        "org.apache.commons.collections4.functors.InvokerTransformer",
+        "org.apache.commons.collections4.functors.ChainedTransformer",
+        "org.apache.commons.collections4.functors.ConstantTransformer",
+        "org.apache.commons.collections4.functors.InstantiateTransformer",
+        "org.apache.commons.fileupload.disk.DiskFileItem", "org.apache.commons.io.output.DeferredFileOutputStream",
+        "org.apache.commons.io.output.ThresholdingOutputStream", "org.apache.wicket.util.upload.DiskFileItem",
+        "org.apache.wicket.util.io.DeferredFileOutputStream", "org.apache.wicket.util.io.ThresholdingOutputStream",
+        "org.codehaus.groovy.runtime.ConvertedClosure", "org.codehaus.groovy.runtime.MethodClosure",
+        "org.hibernate.engine.spi.TypedValue", "org.hibernate.tuple.component.AbstractComponentTuplizer",
+        "org.hibernate.tuple.component.PojoComponentTuplizer", "org.hibernate.type.AbstractType",
+        "org.hibernate.type.ComponentType", "org.hibernate.type.Type", "org.hibernate.EntityMode",
+        "com.sun.rowset.JdbcRowSetImpl", "org.jboss.interceptor.builder.InterceptionModelBuilder",
+        "org.jboss.interceptor.builder.MethodReference", "org.jboss.interceptor.proxy.DefaultInvocationContextFactory",
+        "org.jboss.interceptor.proxy.InterceptorMethodHandler",
+        "org.jboss.interceptor.reader.ClassMetadataInterceptorReference",
+        "org.jboss.interceptor.reader.DefaultMethodMetadata", "org.jboss.interceptor.reader.ReflectiveClassMetadata",
+        "org.jboss.interceptor.reader.SimpleInterceptorMetadata",
+        "org.jboss.interceptor.spi.instance.InterceptorInstantiator",
+        "org.jboss.interceptor.spi.metadata.InterceptorReference", "org.jboss.interceptor.spi.metadata.MethodMetadata",
+        "org.jboss.interceptor.spi.model.InterceptionType", "org.jboss.interceptor.spi.model.InterceptionModel",
+        "sun.rmi.server.UnicastRef", "sun.rmi.transport.LiveRef", "sun.rmi.transport.tcp.TCPEndpoint",
+        "java.rmi.server.RemoteObject", "java.rmi.server.RemoteRef", "java.rmi.server.UnicastRemoteObject",
+        "sun.rmi.server.ActivationGroupImpl", "sun.rmi.server.UnicastServerRef",
+        "org.springframework.aop.framework.AdvisedSupport", "net.sf.json.JSONObject",
+        "org.jboss.weld.interceptor.builder.InterceptionModelBuilder",
+        "org.jboss.weld.interceptor.builder.MethodReference",
+        "org.jboss.weld.interceptor.proxy.DefaultInvocationContextFactory",
+        "org.jboss.weld.interceptor.proxy.InterceptorMethodHandler",
+        "org.jboss.weld.interceptor.reader.ClassMetadataInterceptorReference",
+        "org.jboss.weld.interceptor.reader.DefaultMethodMetadata",
+        "org.jboss.weld.interceptor.reader.ReflectiveClassMetadata",
+        "org.jboss.weld.interceptor.reader.SimpleInterceptorMetadata",
+        "org.jboss.weld.interceptor.spi.instance.InterceptorInstantiator",
+        "org.jboss.weld.interceptor.spi.metadata.InterceptorReference",
+        "org.jboss.weld.interceptor.spi.metadata.MethodMetadata",
+        "org.jboss.weld.interceptor.spi.model.InterceptionModel",
+        "org.jboss.weld.interceptor.spi.model.InterceptionType", "org.python.core.PyObject",
+        "org.python.core.PyBytecode", "org.python.core.PyFunction", "org.mozilla.javascript",
+        "org.apache.myfaces.context.servlet.FacesContextImpl",
+        "org.apache.myfaces.context.servlet.FacesContextImplBase", "org.apache.myfaces.el.CompositeELResolver",
+        "org.apache.myfaces.el.unified.FacesELContext",
+        "org.apache.myfaces.view.facelets.el.ValueExpressionMethodExpression",
+        "com.sun.syndication.feed.impl.ObjectBean", "org.springframework.beans.factory.ObjectFactory",
+        "org.springframework.aop.framework.AdvisedSupport", "org.springframework.aop.target.SingletonTargetSource",
+        "com.vaadin.data.util.NestedMethodProperty", "com.vaadin.data.util.PropertysetItem",
+        "org.springframework.beans.factory.config.PropertyPathFactoryBean",
+        "org.springframework.aop.support.DefaultBeanFactoryPointcutAdvisor",
+        "javax.management.BadAttributeValueExpException", "org.apache.commons.configuration.ConfigurationMap",
+        "com.mchange.v2.c3p0.WrapperConnectionPoolDataSource", "com.mchange.v2.c3p0.JndiRefForwardingDataSource",
+        "com.sun.rowset.JdbcRowSetImpl", "org.eclipse.jetty.plus.jndi.Resource" };
+  }
+
+  private final List<String> untrustedPackages = new ArrayList<>(Arrays.asList(DENY_LIST));
+
+  private Schema checkedExpected;
+
   public SpecificDatumReader() {
     this(null, null, SpecificData.get());
   }
@@ -101,9 +187,88 @@ public class SpecificDatumReader<T> extends GenericDatumReader<T> {
     if (name == null)
       return null;
     try {
-      return ClassUtils.forName(getData().getClassLoader(), name);
+      Class clazz = ClassUtils.forName(getData().getClassLoader(), name);
+      checkSecurity(clazz);
+      return clazz;
     } catch (ClassNotFoundException e) {
       throw new AvroRuntimeException(e);
+    }
+  }
+
+  private void checkSecurity(Class clazz) {
+    if (clazz.isPrimitive()) {
+      return;
+    }
+    checkSecurity(clazz.getName());
+  }
+
+  private void checkSecurity(String className) {
+    for (String untrustedPackage : getUntrustedPackages()) {
+      if (className.equals(untrustedPackage) || className.startsWith(untrustedPackage + ".")) {
+        throw new SecurityException("Forbidden class " + className
+            + "! This class is not trusted to be included in Avro schema using java-class.");
+      }
+    }
+  }
+
+  /**
+   * Return the mutable list of class names, and package names, that may not be
+   * instantiated through the java-class and java-key-class schema properties.
+   * It is initialized from {@link #DENY_LIST}.
+   */
+  public final List<String> getUntrustedPackages() {
+    return untrustedPackages;
+  }
+
+  @Override
+  public T read(T reuse, Decoder in) throws IOException {
+    if (getData().isFastReaderEnabled()) {
+      // The fast reader resolves java-class and java-key-class on its own,
+      // without going through findStringClass, so check the expected schema
+      // here before it can instantiate anything.
+      Schema expected = getExpected();
+      if (expected != checkedExpected) {
+        FastReaderBuilder builder = getData().getFastReaderBuilder();
+        checkSchemaClasses(expected, builder.isClassPropEnabled(), builder.isKeyClassEnabled(),
+            Collections.newSetFromMap(new IdentityHashMap<Schema, Boolean>()));
+        checkedExpected = expected;
+      }
+    }
+    return super.read(reuse, in);
+  }
+
+  private void checkSchemaClasses(Schema schema, boolean classProp, boolean keyClassProp, Set<Schema> seen) {
+    if (schema == null || !seen.add(schema)) {
+      return;
+    }
+    switch (schema.getType()) {
+    case RECORD:
+      for (Schema.Field field : schema.getFields()) {
+        checkSchemaClasses(field.schema(), classProp, keyClassProp, seen);
+      }
+      break;
+    case ARRAY:
+      checkSchemaClasses(schema.getElementType(), classProp, keyClassProp, seen);
+      break;
+    case MAP:
+      String keyClass = schema.getProp(SpecificData.KEY_CLASS_PROP);
+      if (keyClassProp && keyClass != null) {
+        checkSecurity(keyClass);
+      }
+      checkSchemaClasses(schema.getValueType(), classProp, keyClassProp, seen);
+      break;
+    case UNION:
+      for (Schema type : schema.getTypes()) {
+        checkSchemaClasses(type, classProp, keyClassProp, seen);
+      }
+      break;
+    case STRING:
+      String stringClass = schema.getProp(SpecificData.CLASS_PROP);
+      if (classProp && stringClass != null) {
+        checkSecurity(stringClass);
+      }
+      break;
+    default:
     }
   }
 
