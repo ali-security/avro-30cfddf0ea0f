@@ -18,6 +18,7 @@ require 'avro'
 require 'webrick'
 require 'uri'
 require 'logger'
+require 'rubygems'
 
 class GenericResponder < Avro::IPC::Responder
   def initialize(proto, msg, datum)

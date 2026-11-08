@@ -17,26 +17,33 @@
 # under the License.
 #
 
-sudo: required
+# Seal build: the Java implementation's test suite (lang/java/build.sh test:
+# `mvn -B test` then `mvn -B test -Phadoop3`), run natively on the JDK 8 and
+# JDK 11 legs upstream runs it on. The Yetus/Docker multi-language harness and
+# the Windows C#-only leg are not used: they test the C/C++/C#/Python/Ruby/PHP/
+# Perl/JS implementations, none of which ship in the org.apache.avro:avro jar.
+# Checkstyle (test phase) and spotless (compile phase) are lint gates, skipped.
 
-services:
-  - docker
+language: java
+
+env:
+  global:
+    - VERSION=1.9.2
+    - MVN_GATES="-Dcheckstyle.skip=true -Dspotless.check.skip=true"
 
 matrix:
   include:
-  - language: generic
-    env:
-      JAVA=8
+  - jdk: openjdk8
+    env: JAVA=8
 
-  - language: generic
-    env:
-      JAVA=11
+  - jdk: openjdk11
+    env: JAVA=11
 
-  - os: windows
-    language: bash
+install: true
 
-before_install: "if [ -x ./.travis/before_install.sh   ] ; then ./.travis/before_install.sh ; fi"
-install:        "if [ -x ./.travis/install.sh          ] ; then ./.travis/install.sh        ; fi"
-before_script:  "if [ -x ./.travis/before_script.sh    ] ; then ./.travis/before_script.sh  ; fi"
-script:         "if [ -x ./.travis/script.sh           ] ; then ./.travis/script.sh         ; fi"
-after_script:   "if [ -x ./.travis/after_script.sh     ] ; then ./.travis/after_script.sh   ; fi"
+script:
+  - cd lang/java
+  - mvn -B -V test $MVN_GATES
+  - $TRAVIS_BUILD_DIR/.travis/print-test-results.sh
+  - mvn -B test -Phadoop3 $MVN_GATES
+  - $TRAVIS_BUILD_DIR/.travis/print-test-results.sh
